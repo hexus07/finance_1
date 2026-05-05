@@ -11,4 +11,4 @@
 - **Frontend:** React + Vite + Tailwind CSS
 - **Backend:** FastAPI + SQLAlchemy
 - **Database:** SQLite
-- **APIs:** Finnhub
+- **APIs:** Finnhub, CoinGecko, NewsAPI
