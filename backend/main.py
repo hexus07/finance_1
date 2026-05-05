@@ -16,9 +16,8 @@ import asyncio
 import random
 
 from config import settings
-ALPHA_VANTAGE_API_KEY = settings.alpha_vantage_api_key
 FINNHUB_API_KEY = settings.finnhub_api_key
-
+COINGECKO_API_KEY = settings.coingecko_api_key  # ← ADD THIS
 # Create all tables on startup
 Base.metadata.create_all(bind=engine)
 
@@ -70,9 +69,9 @@ def fetch_crypto_price(symbol: str) -> dict:
         search_response = requests.get(
             'https://api.coingecko.com/api/v3/search',
             params={'query': symbol},
+            headers={'x-cg-demo-api-key': COINGECKO_API_KEY},  # ← ADD HEADER
             timeout=5
         )
-        
         search_data = search_response.json()
         
         # Find the coin in search results (match by symbol first, then name)
@@ -91,7 +90,7 @@ def fetch_crypto_price(symbol: str) -> dict:
             return {'success': False}
         
         crypto_id = coin['id']
-        
+
         # Now fetch the price with the correct ID
         response = requests.get(
             'https://api.coingecko.com/api/v3/simple/price',

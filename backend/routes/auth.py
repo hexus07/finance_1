@@ -194,3 +194,12 @@ def withdraw_from_savings(request: WithdrawFromSavingsRequest, current_user: Use
         "savings_balance": current_user.savings_balance,
         "message": "Amount withdrawn from savings successfully"
     }
+
+@router.delete("/me")
+def delete_account(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from models import Transaction, Asset
+    db.query(Transaction).filter(Transaction.user_id == current_user.id).delete()
+    db.query(Asset).filter(Asset.user_id == current_user.id).delete()
+    db.delete(current_user)
+    db.commit()
+    return {"message": "Account deleted successfully"}

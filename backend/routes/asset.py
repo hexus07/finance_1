@@ -208,20 +208,88 @@ def get_portfolio_growth(
     
     return growth_data
 
-@router.post("/withdraw-savings")
-async def withdraw_from_savings(amount: float, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    user = db.query(User).filter(User.id == current_user.id).first()
+# Add this to backend/routes/asset.py (at the end of the file)
+
+@router.get("/search/{symbol}")
+def search_asset(
+    symbol: str,
+    current_user: User = Depends(get_current_user)
+):
+    from main import fetch_stock_price, fetch_crypto_price
     
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    if user.savings_balance < amount:
-        raise HTTPException(status_code=400, detail="Insufficient savings")
+    # Try stock first
+    stock_data = fetch_stock_price(symbol.upper())
     
-    user.savings_balance -= amount
-    user.balance += amount
-    db.commit()
+    if stock_data['success']:
+        return {
+            "symbol": symbol.upper(),
+            "type": "stock",
+            "price": stock_data['price'],
+            "change_24h": stock_data['change_24h'],
+            "success": True
+        }
+    
+    # Try crypto if stock fails
+    crypto_data = fetch_crypto_price(symbol)
+    
+    if crypto_data['success']:
+        return {
+            "symbol": symbol.upper(),
+            "type": "crypto",
+            "price": crypto_data['price'],
+            "change_24h": crypto_data['change_24h'],
+            "success": True
+        }
     
     return {
-        "balance": user.balance,
-        "savings_balance": user.savings_balance
+        "success": False,
+        "message": f"Could not find data for symbol: {symbol}"
     }
+
+
+@router.get("/market-news")
+def get_market_news():
+    """Get market news from 3rd party API (Static HTML API - 2 points)"""
+    import requests
+    from config import settings
+    
+    try:
+        response = requests.get(
+            'https://newsapi.org/v2/everything',
+            params={
+                'q': 'stock market finance',
+                'sortBy': 'publishedAt',
+                'language': 'en',
+                'pageSize': 6,
+                'apiKey': settings.news_api_key or 'demo'
+            },
+            timeout=10
+        )
+        
+        data = response.json()
+        
+        if data.get('articles'):
+            return {
+                "success": True,
+                "articles": [
+                    {
+                        "title": article.get('title'),
+                        "description": article.get('description'),
+                        "url": article.get('url'),
+                        "source": article.get('source', {}).get('name'),
+                        "image": article.get('urlToImage'),
+                        "publishedAt": article.get('publishedAt'),
+                    }
+                    for article in data.get('articles', [])[:6]
+                ]
+            }
+        
+        return {"success": False, "message": "No articles found"}
+    
+    except Exception as e:
+        print(f"Failed to fetch news: {e}")
+        return {
+            "success": False,
+            "articles": [],
+            "message": "Failed to fetch news"
+        }

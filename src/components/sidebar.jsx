@@ -1,6 +1,7 @@
 import { Home, TrendingUp, DollarSign, Target, Settings, LogOut } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
@@ -9,6 +10,7 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -16,6 +18,21 @@ export default function Sidebar() {
   const handleLogout = () => {
     logout();  // Clear token and user state
     navigate('/login');  // Redirect to login
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Are you sure?')) {
+      return;
+    }
+
+    try {
+      await api.deleteAccount();
+      logout();
+      navigate('/login');
+      alert('Account deleted');
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   return (
@@ -59,10 +76,10 @@ export default function Sidebar() {
       <div className="p-4 border-t border-[var(--glass-border)]">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#60a5fa] to-[#3b82f6] flex items-center justify-center">
-            <span className="text-sm font-semibold text-white">DC</span>
+            <span className="text-sm font-semibold text-white">{user.name.charAt(0)}</span>
           </div>
           <div className="flex-1">
-            <p className="font-medium text-sm">Daniil Chuhai</p>
+            <p className="font-medium text-sm">{user.name}</p>
           </div>
           <button
             onClick={handleLogout}
@@ -72,7 +89,13 @@ export default function Sidebar() {
             <LogOut className="w-4 h-4" />
           </button>
         </div>
-
+        <button
+          onClick={handleDeleteAccount}
+          className="w-full px-1 py-1 rounded-lg bg-red-500 hover:bg-red-500/40 "
+          aria-label="Delete account"
+        >
+          Delete Account
+        </button>
       </div>
     </div>
   );

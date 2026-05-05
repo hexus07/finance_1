@@ -141,7 +141,21 @@ async withdrawFromSavings(amount) {
 async getPortfolioGrowth(days = 7) {
   return this.request(`/assets/portfolio-growth?days=${days}`);
 }
+
+async deleteAccount() {
+  return this.request('/auth/me', {
+    method: 'DELETE',
+  });
 }
+async searchAsset(symbol) {
+  return this.request(`/assets/search/${symbol}`);
+}
+async getMarketNews() {
+  return this.request('/assets/market-news');
+}
+}
+
+
 
 
 

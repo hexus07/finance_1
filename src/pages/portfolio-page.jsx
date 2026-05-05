@@ -1,6 +1,6 @@
 import { GlassCard } from '../components/glass-card';
 import { Sparkline } from '../components/sparkline';
-import { TrendingUp, TrendingDown, RefreshCw, Play, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, Play, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { SiApple, SiGoogle, SiTesla } from 'react-icons/si';
 import { TiVendorMicrosoft } from 'react-icons/ti';
@@ -8,6 +8,7 @@ import { useRef, useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { Modal } from '../components/actions/modal';
 import { AddAssetModal } from '../components/actions/add-asset-modal';
+import { NewsPanel } from '../components/news-card';
 
 const formatEuro = (value) => `${value.toLocaleString('en-US', {
   minimumFractionDigits: 2,
@@ -237,7 +238,7 @@ export function PortfolioPage() {
           </div>
         </GlassCard>
         <GlassCard className="p-4 overflow-hidden"> 
-          <VideoPanel />
+          <NewsPanel />
         </GlassCard>
       </div>
 
@@ -297,7 +298,7 @@ export function PortfolioPage() {
               onClick={() => setAddAssetOpen(true)}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#10b981]/20 border border-[#10b981]/30 text-[#10b981] hover:bg-[#10b981]/30 transition-all font-medium"
             >
-              <RefreshCw className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
               Add Asset
             </button>
           <button 
@@ -389,6 +390,9 @@ export function PortfolioPage() {
             </div>
           )}
         </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          ✨ Stock data provided by Finnhub | Crypto data provided by CoinGecko
+      </p>
       </div>
 
       <Modal
@@ -400,11 +404,13 @@ export function PortfolioPage() {
         onClose={() => {
           setAddAssetOpen(false);
         }}
-        onSuccess={() => {
-          loadAssets();
-          loadPortfolioGrowth(); // Refresh portfolio
-          setAddAssetOpen(false);
-        }}
+      onSuccess={async () => {
+        loadAssets();
+        loadPortfolioGrowth();
+        setRefreshing(true);
+        setRefreshing(false);
+        setAddAssetOpen(false);
+      }}
       />
       </Modal>
     </div>

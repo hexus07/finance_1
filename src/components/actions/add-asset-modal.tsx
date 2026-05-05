@@ -1,5 +1,5 @@
-import { Euro, Calendar, Tag, FileText, Hash } from 'lucide-react';
-import { useState } from "react";
+import { Euro, Calendar, Tag, FileText, Hash, Loader, TrendingUp, TrendingDown } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 
 interface AddAssetModalProps {
@@ -7,30 +7,71 @@ interface AddAssetModalProps {
   onSuccess?: () => void;
 }
 
-const mockAssets = [
-  "Apple (AAPL)",
-  "Tesla (TSLA)",
-  "Microsoft (MSFT)",
-  "Bitcoin (BTC)",
-  "Ethereum (ETH)",
-  "S&P 500 ETF (SPY)",
-];
+const formatEuro = (value) => `${value.toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})} €`;
 
-export function AssetSearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [filtered, setFiltered] = useState<string[]>([]);
-  const [show, setShow] = useState(false);
+export function AssetSearchInput({ 
+  value, 
+  onChange, 
+  onSelectAsset,
+  disabled 
+}: { 
+  value: string; 
+  onChange: (value: string) => void;
+  onSelectAsset: (data: any) => void;
+  disabled: boolean;
+}) {
+  const [searching, setSearching] = useState(false);
+  const [searchResult, setSearchResult] = useState<any>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const debounceTimer = useRef<any>(null);
 
-  const handleChange = (val: string) => {
+  const handleSearch = async (val: string) => {
     onChange(val);
-    setShow(true);
+    setSearchError("");
+    
+    // Clear previous timer
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
 
-    if (val.trim()) {
-      const results = mockAssets.filter((asset) =>
-        asset.toLowerCase().includes(val.toLowerCase())
-      );
-      setFiltered(results);
-    } else {
-      setFiltered([]);
+    if (!val.trim() || val.length < 1) {
+      setSearchResult(null);
+      setShowResult(false);
+      return;
+    }
+
+    // Debounce search - wait 500ms before searching
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const result = await api.searchAsset(val);
+        
+        if (result.success) {
+          setSearchResult(result);
+          setShowResult(true);
+        } else {
+          setSearchError(result.message || "Asset not found");
+          setSearchResult(null);
+          setShowResult(true);
+        }
+      } catch (error) {
+        setSearchError("Failed to search. Try again.");
+        setSearchResult(null);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+  };
+
+  const handleSelectResult = () => {
+    if (searchResult && searchResult.success) {
+      // Pass data back to parent for auto-fill
+      onSelectAsset(searchResult);
+      setShowResult(false);
     }
   };
 
@@ -38,26 +79,46 @@ export function AssetSearchInput({ value, onChange }: { value: string; onChange:
     <div className="relative">
       <input
         value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder="Search asset (e.g. AAPL, Bitcoin)"
-        className="w-full px-4 py-4 bg-secondary/30 border border-border/50 rounded-xl focus:outline-none focus:border-[#10b981]/50"
+        onChange={(e) => handleSearch(e.target.value)}
+        placeholder="Search symbol (e.g., AAPL, BTC, TSLA)..."
+        disabled={disabled}
+        className="w-full px-4 py-4 bg-secondary/30 border border-border/50 rounded-xl focus:outline-none focus:border-[#10b981]/50 disabled:opacity-50"
       />
 
-      {show && filtered.length > 0 && (
+      {searching && (
+        <Loader className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#10b981] animate-spin" />
+      )}
+
+      {showResult && (
         <div className="absolute z-10 mt-2 w-full rounded-xl border border-border/50 bg-background shadow-lg overflow-hidden">
-          {filtered.map((asset) => (
+          {searchResult && searchResult.success ? (
             <button
-              key={asset}
               type="button"
-              onClick={() => {
-                onChange(asset);
-                setShow(false);
-              }}
-              className="w-full text-left px-4 py-3 hover:bg-secondary/50 transition"
+              onClick={handleSelectResult}
+              className="w-full text-left p-4 hover:bg-secondary/50 transition space-y-2"
             >
-              {asset}
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-lg">{searchResult.symbol}</p>
+                  <p className="text-sm text-muted-foreground capitalize">{searchResult.type}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-lg">{formatEuro(searchResult.price)}</p>
+                  <div className={`flex items-center justify-end gap-1 text-sm ${
+                    searchResult.change_24h >= 0 ? 'text-[#10b981]' : 'text-[#ff8a80]'
+                  }`}>
+                    {searchResult.change_24h >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    {searchResult.change_24h >= 0 ? '+' : ''}{searchResult.change_24h.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-[#10b981]">✨ Click to auto-fill</p>
             </button>
-          ))}
+          ) : (
+            <div className="p-4 text-sm text-red-400">
+              {searchError || "No results found"}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -67,6 +128,7 @@ export function AssetSearchInput({ value, onChange }: { value: string; onChange:
 export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
   const [formData, setFormData] = useState({
     type: "",
+    symbol: "",
     assetName: "",
     quantity: "",
     price: "",
@@ -86,18 +148,24 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
     setError("");
   };
 
-  const handleAssetNameChange = (value: string) => {
+  const handleSymbolChange = (value: string) => {
     setFormData((prev) => ({
       ...prev,
-      assetName: value,
+      symbol: value,
     }));
     setError("");
   };
 
-  const extractSymbol = (assetName: string): string => {
-    // Extract symbol from "Asset Name (SYMBOL)" format
-    const match = assetName.match(/\(([^)]+)\)$/);
-    return match ? match[1] : assetName;
+  // Auto-fill form when user selects a search result
+  const handleSelectAsset = (searchResult: any) => {
+    setFormData((prev) => ({
+      ...prev,
+      symbol: searchResult.symbol,
+      assetName: searchResult.symbol, // Use symbol as name for now
+      type: searchResult.type === "crypto" ? "crypto" : "stock",
+      price: searchResult.price.toString(),
+      // Keep other fields as they are
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,8 +177,8 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
       setError("Please select an asset type");
       return;
     }
-    if (!formData.assetName) {
-      setError("Please select or enter an asset name");
+    if (!formData.symbol) {
+      setError("Please search and select an asset");
       return;
     }
     if (!formData.quantity || parseFloat(formData.quantity) <= 0) {
@@ -134,21 +202,20 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
 
     setLoading(true);
     try {
-      const symbol = extractSymbol(formData.assetName);
-      
       await api.createAsset({
-        symbol: symbol,
-        name: formData.assetName,
+        symbol: formData.symbol,
+        name: formData.assetName || formData.symbol,
         type: formData.type,
-        quantity: formData.quantity,
-        purchase_price: formData.price,
+        quantity: parseFloat(formData.quantity),
+        purchase_price: parseFloat(formData.price),
         purchase_date: formData.date,
         notes: formData.notes,
       });
 
-      // Success feedback
+      // Reset form
       setFormData({
         type: "",
+        symbol: "",
         assetName: "",
         quantity: "",
         price: "",
@@ -156,10 +223,7 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
         notes: "",
       });
 
-      // Call parent callback if provided
       onSuccess?.();
-
-      // Close modal after brief delay
       setTimeout(onClose, 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add asset. Please try again.");
@@ -175,6 +239,22 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
           {error}
         </div>
       )}
+
+      {/* Search Asset (Live with Autofill) */}
+      <div>
+        <label className="block text-sm font-medium mb-2">
+          Search Asset
+        </label>
+        <AssetSearchInput 
+          value={formData.symbol} 
+          onChange={handleSymbolChange}
+          onSelectAsset={handleSelectAsset}
+          disabled={loading}
+        />
+        {formData.symbol && (
+          <p className="text-xs text-[#10b981] mt-2">✨ Auto-filled from live data</p>
+        )}
+      </div>
 
       {/* Asset Type */}
       <div>
@@ -202,14 +282,6 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
         </div>
       </div>
 
-      {/* Asset Name */}
-      <div>
-        <label htmlFor="assetName" className="block text-sm font-medium mb-2">
-          Asset Name
-        </label>
-        <AssetSearchInput value={formData.assetName} onChange={handleAssetNameChange} />
-      </div>
-
       {/* Quantity */}
       <div>
         <label htmlFor="quantity" className="block text-sm font-medium mb-2">
@@ -232,7 +304,7 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
         </div>
       </div>
 
-      {/* Buy Price */}
+      {/* Price - Auto-filled from search */}
       <div>
         <label htmlFor="price" className="block text-sm font-medium mb-2">
           Price Bought At
@@ -249,7 +321,7 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
             onChange={handleChange}
             required
             disabled={loading}
-            className="w-full pl-12 pr-4 py-4 bg-secondary/30 border border-border/50 rounded-xl text-foreground text-lg font-semibold focus:outline-none focus:border-[#10b981]/50 transition-all disabled:opacity-50"
+            className="w-full pl-12 pr-4 py-4 bg-secondary/30 border border-border/50 rounded-xl text-foreground focus:outline-none focus:border-[#10b981]/50 transition-all disabled:opacity-50"
           />
         </div>
       </div>
@@ -277,42 +349,37 @@ export function AddAssetModal({ onClose, onSuccess }: AddAssetModalProps) {
       {/* Notes */}
       <div>
         <label htmlFor="notes" className="block text-sm font-medium mb-2">
-          Notes
+          Notes (Optional)
         </label>
         <div className="relative">
           <FileText className="absolute left-4 top-4 w-5 h-5 text-muted-foreground" />
           <textarea
             id="notes"
             name="notes"
-            rows={3}
-            placeholder="Optional notes..."
+            placeholder="Add any notes..."
             value={formData.notes}
             onChange={handleChange}
             disabled={loading}
-            className="w-full pl-12 pr-4 py-4 bg-secondary/30 border border-border/50 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#10b981]/50 transition-all resize-none disabled:opacity-50"
+            className="w-full pl-12 pr-4 py-4 bg-secondary/30 border border-border/50 rounded-xl text-foreground focus:outline-none focus:border-[#10b981]/50 transition-all disabled:opacity-50 resize-none h-20"
           />
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-4 pt-4">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={loading}
-          className="flex-1 py-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/50 transition-all font-medium disabled:opacity-50"
-        >
-          Cancel
-        </button>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex-1 py-4 rounded-xl bg-[#10b981] text-white font-semibold hover:bg-[#0ea574] transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
-        >
-          {loading ? "Adding..." : "Add Asset"}
-        </button>
-      </div>
+      {/* Submit Button */}
+      <button
+        type="submit"
+        disabled={loading || !formData.symbol}
+        className="w-full py-4 rounded-xl bg-[#10b981] text-white font-semibold hover:bg-[#10b981]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+      >
+        {loading ? (
+          <>
+            <Loader className="w-5 h-5 animate-spin" />
+            Adding Asset...
+          </>
+        ) : (
+          "Add Asset"
+        )}
+      </button>
     </form>
   );
 }

@@ -40,11 +40,6 @@ export function HomePage() {
   ? Math.round((user?.savings_balance / user?.savings_goal) * 100)
   : 0;
 
-  const stats = [
-    { label: 'Monthly Budget', value: user?.monthlyBudget || '0', change: '+3.1%', trend: 'up', icon: Wallet },
-    { label: 'Savings Goal', value: user?.savingsGoal || '0', current_value: user?.savings_balance || '0', change: '+6%', trend: 'up', icon: Target },
-    { label: 'Portfolio Value', value: '1,180€', change: '+1.2%', trend: 'up', icon: TrendingUp },
-  ];
 
 
 
@@ -117,7 +112,6 @@ export function HomePage() {
               <Target className="w-6 h-6 text-[#10b981]" />
             </div>
             <div className="flex items-center gap-1 text-sm text-[#10b981]">
-              <TrendingUp className="w-4 h-4" />
               {savingsProgress}% of goal
             </div>
           </div>
